@@ -28,24 +28,68 @@ abstract class AbstractDriver
 
 	protected $_options;
 
-	public abstract function load($key);
+	/**
+	 * Loads data from the cache.
+	 * 
+	 * @param string $key            The key that the data is stored under.
+	 * @param mixed  $failure_return Value to return on failure, default false
+	 *
+	 * @return mixed The data from the cache or $failure_return on failure
+	 */
+	abstract public function load($key, $failure_return = false);
 
-	public abstract function save($key, $data, array $tags = array(), $lifetime = null);
+	/**
+	 * Saves data into the cache.
+	 * 
+	 * @param string $key      A string which the data is to be stored under.
+	 * @param mixed  $data     The data to be stored (null will remove the entry)
+	 * @param int    $lifetime How long should it be before we remove this piece of data from the cache?
+	 */
+	abstract public function save($key, $data, $lifetime = null);
 
-	public abstract function test($key);
+	/**
+	 * Check if data for a key has been stored in the cache.
+	 *
+	 * @param string $key The key to check
+	 *
+	 * @return boolean
+	 */
+	abstract public function test($key);
 
-	public abstract function remove($key);
+	/**
+	 * Removes a cache item with key $key from the file cache.
+	 * 
+	 * @param string $key The key of the item to remove.
+	 */
+	abstract public function remove($key);
 
-	public abstract function clean($mode, array $tags = array());
+	/**
+	 * Flush the entire cache
+	 */
+	abstract public function flush();
 
-	public abstract function getMetadata($key);
+	/**
+	 * Gets normalized information about a cached item
+	 *
+	 * @param string $key The key to retrieve metadata for
+	 *
+	 * @return array
+	 */
+	abstract public function getMetadata($key);
+
+	/**
+	 * Get an array of data about this cache driver
+	 *
+	 * @return array
+	 */
+	abstract public function getStats();
 
 	/**
 	 * Normalize a cache key
 	 *
-	 * @param string $key
+	 * @param string $key The cache key to normalize
 	 *
-	 * @return string
+	 * @return string The cache key, but with invalid characters replaced by underscores.
 	 */
 	protected function _normalize($key)
 	{

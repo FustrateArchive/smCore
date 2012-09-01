@@ -28,14 +28,18 @@ namespace smCore;
 
 class Response
 {
+	protected $_app;
+
 	private $_headers = array();
 	private $_meta = array();
 	private $_body = null;
 
 	// Some common response codes
 	const HTTP_200 = 'HTTP/1.1 200 OK';
+	const HTTP_204 = 'HTTP/1.1 204 No Content';
 	const HTTP_301 = 'HTTP/1.1 301 Moved Permanently';
 	const HTTP_302 = 'HTTP/1.1 302 Found';
+	const HTTP_303 = 'HTTP/1.1 303 See Other';
 	const HTTP_307 = 'HTTP/1.1 307 Temporary Redirect';
 	const HTTP_403 = 'HTTP/1.1 403 Not Allowed';
 	const HTTP_404 = 'HTTP/1.1 404 Not Found';
@@ -48,15 +52,19 @@ class Response
 	/**
 	 * Constructor for the Response class.
 	 */
-	public function __construct()
+	public function __construct(Application $app)
 	{
+		$this->_app = $app;
+
 		// Security.
-		$this->addHeader(self::SAMEORIGIN);
-		$this->addHeader(self::XCONTENTPOLICY);
+		$this
+			->addHeader(self::SAMEORIGIN)
+			->addHeader(self::XCONTENTPOLICY)
+		;
 
 		// Search engines leak prevention
 		// Do not let search engines index anything if there is something in $_GET.
-		if (Application::get('request')->hasGetParams())
+		if ($this->_app['request']->hasGetParams())
 		{
 			$this->_meta[] = '<meta name="robots" content="noindex" />';
 		}
@@ -102,6 +110,16 @@ class Response
 	}
 
 	/**
+	 * Clear all stored headers.
+	 */
+	public function clearHeaders()
+	{
+		$this->_headers = array();
+
+		return $this;
+	}
+
+	/**
 	 * Body of the response.
 	 *
 	 * @return string
@@ -136,21 +154,35 @@ class Response
 			}
 		}
 
-		// @todo output stuff
+		if (empty($this->_headers['http_response_code']))
+		{
+			header(self::HTTP_200);
+		}
+
 		echo $this->_body;
 
 		die();
 	}
 
-	public function redirect($url, $permanent = false)
+	/**
+	 * 
+	 *
+	 * @param string  $url       URL to redirect to
+	 * @param boolean $permanent Redirect permanently (301) or temporarily (307)
+	 */
+	public function redirect($url = null, $permanent = false)
 	{
-		if (!preg_match('/^https?:\/\//', $url))
+		if (null === $url)
 		{
-			$url = Settings::URL . '/' . ltrim($url, '/');
+			$url = $this->_app['settings']['url'];
+		}
+		else if (!preg_match('/^https?:\/\//', $url))
+		{
+			$url = $this->_app['settings']['url'] . '/' . ltrim($url, '/');
 		}
 
 		$this
-			->addHeader($permanent ? 301 : 307)
+			->addHeader(303)
 			->addHeader('Location: ' . $url)
 			->sendOutput()
 		;

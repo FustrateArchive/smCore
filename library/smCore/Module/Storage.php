@@ -22,19 +22,16 @@
 
 namespace smCore\Module;
 
-use smCore, smCore\Module;
+use smCore\Application, smCore\Module;
 
 abstract class Storage extends smCore\Storage
 {
-	protected $_parent_module;
+	protected $_app;
+	protected $module;
 
-	public function __construct(Module $parent_module)
+	public function __construct(Application $app, Module $module)
 	{
-		$this->_parent_module = $parent_module;
-	}
-
-	protected function _getParentModule()
-	{
-		return $this->_parent_module;
+		$this->_app = $app;
+		$this->module = $module;
 	}
 }

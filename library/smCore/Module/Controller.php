@@ -22,30 +22,22 @@
 
 namespace smCore\Module;
 
-use smCore\Module;
+use smCore\Application, smCore\Module;
 
 abstract class Controller
 {
-	protected $_parent_module;
+	protected $_app;
+	protected $module;
 
 	/**
 	 * 
 	 *
 	 * @param smCore\Module $parentModule
 	 */
-	public function __construct(Module $parent_module)
+	public function __construct(Application $app, Module $module)
 	{
-		$this->_parent_module = $parent_module;
-	}
-
-	/**
-	 * Get the parent module, in order to use its helper methods.
-	 *
-	 * @return smCore\Module The module which owns this controller
-	 */
-	protected function _getParentModule()
-	{
-		return $this->_parent_module;
+		$this->_app = $app;
+		$this->module = $module;
 	}
 
 	/**

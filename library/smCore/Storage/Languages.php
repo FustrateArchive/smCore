@@ -22,21 +22,23 @@
 
 namespace smCore\Storage;
 
-use smCore\Application, smCore\Exception, smCore\Settings, smCore\Model\Language;
+use smCore\Exception, smCore\Model\Language;
 
-class Languages
+class Languages extends AbstractStorage
 {
 	protected $_languages = array();
 	protected $_runtimeCache = array();
 
-	public function __construct()
+	public function __construct($app)
 	{
-		$cache = Application::get('cache');
+		parent::__construct($app);
+
+		$cache = $this->_app['cache'];
 
 		// Load the configs
 		if (false === $this->_languages = $cache->load('core_languagestorage'))
 		{
-			$db = Application::get('db');
+			$db = $this->_app['db'];
 
 			$result = $db->query("
 				SELECT id_language, language_code, language_name
@@ -49,10 +51,6 @@ class Languages
 			}
 
 			$cache->save('core_languagestorage', $this->_languages);
-
-			// @todo: cache tags
-			// Anything that depends on this should be refreshed
-			// $cache->clean('core_language');
 		}
 	}
 
@@ -70,15 +68,17 @@ class Languages
 
 		if (!empty($this->_languages[$code]))
 		{
-			return $this->_runtimeCache[$code] = new Language($this->_languages[$code]['language_name'], $code, $this->_languages[$code]['id_language']);
+			return $this->_runtimeCache[$code] = new Language($this->_app, $this->_languages[$code]['language_name'], $code, $this->_languages[$code]['id_language']);
 		}
 
-		if ($code !== Settings::DEFAULT_LANG)
+		$settings = $this->_app['settings'];
+
+		if ($code !== $settings['default_lang'])
 		{
-			return $this->getByCode(Settings::DEFAULT_LANG);
+			return $this->getByCode($settings['default_lang']);
 		}
 
-		throw new Exception('There\'s been a bit of a problem loading the language strings.');
+		throw new Exception(sprintf('There\'s been a bit of a problem loading the language "%s".', $code));
 	}
 
 	public function getAll()

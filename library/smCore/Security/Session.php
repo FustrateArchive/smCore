@@ -22,14 +22,21 @@
 
 namespace smCore\Security;
 
-use smCore\Application, smCore\Settings, smCore\Handlers\Session as SessionHandler;
+use smCore\Application;
 
 class Session
 {
-	protected static $_started = false;
-	protected static $_lifetime = 0;
+	protected $_app;
 
-	protected static function _overrideIni()
+	protected $_started = false;
+	protected $_lifetime = 3600;
+
+	public function __construct(Application $app)
+	{
+		$this->_app = $app;
+	}
+
+	protected function _overrideIni()
 	{
 		// @todo pay attention to safe mode set.
 		ini_set('arg_separator.output', '&amp;');
@@ -42,13 +49,13 @@ class Session
 		ini_set('session.cookie_path', '/');
 		ini_set('session.cookie_secure', false);
 		ini_set('session.cookie_httponly', true);
-		ini_set('session.cookie_domain', Settings::COOKIE_DOMAIN);
+		ini_set('session.cookie_domain', $this->_app['settings']['cookie_domain']);
 	}
 
-	public static function start()
+	public function start()
 	{
 		// Only start if it wasn't started yet.
-		if (self::$_started === false)
+		if (false === $this->_started)
 		{
 			// We should start anew. What about when PHP already started? Kill it.
 			if (1 == ini_get('session.auto_start'))
@@ -57,27 +64,24 @@ class Session
 			}
 
 			// Override ini parameters, if we can. That will happen both with default and user-provided options.
-			self::_overrideIni();
-
-			// Create the session handler, it will register itself to PHP.
-			new SessionHandler();
+			$this->_overrideIni();
 
 			// Go!
-			session_name(Settings::COOKIE_NAME);
+			session_name($this->_app['settings']['cookie_name']);
 			session_start();
 
-			self::$_started = true;
+			$this->_started = true;
 		}
 	}
 
-	public static function end()
+	public function end()
 	{
 		unset($_SESSION['id_user']);
 		session_destroy();
-		setcookie(Settings::COOKIE_NAME, '', 0, Settings::COOKIE_PATH, Settings::COOKIE_DOMAIN);
+		setcookie($this->_app['settings']['cookie_name'], '', 0, $this->_app['settings']['cookie_path'], $this->_app['settings']['cookie_domain']);
 	}
 
-	public static function reinitialize()
+	public function reinitialize()
 	{
 		// Keep the data itself, we will need it.
 		$old_data = $_SESSION;
@@ -90,9 +94,9 @@ class Session
 		$_SESSION = $old_data;
 	}
 
-	public static function exists()
+	public function exists()
 	{
-		$cookie = Application::get('input')->cookie->getRaw(Settings::COOKIE_NAME);
+		$cookie = $this->_app['input']->cookie->getRaw($this->_app['settings']['cookie_name']);
 
 		if (empty($cookie))
 		{
@@ -107,10 +111,10 @@ class Session
 	 *
 	 * @param int $length
 	 */
-	public static function setLifetime($length)
+	public function setLifetime($length)
 	{
-		self::$_lifetime = max(0, (int) $length);
-		session_set_cookie_params(self::$_lifetime);
+		$this->_lifetime = max(0, (int) $length);
+		session_set_cookie_params($this->_lifetime);
 	}
 
 	/**
@@ -118,8 +122,8 @@ class Session
 	 *
 	 * @return int
 	 */
-	public static function getLifetime()
+	public function getLifetime()
 	{
-		return self::$_lifetime;
+		return $this->_lifetime;
 	}
 }

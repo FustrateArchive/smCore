@@ -22,28 +22,30 @@
 
 namespace smCore\Storage;
 
-use smCore\Application;
-
-class Events
+class Events extends AbstractStorage
 {
 	public function getActiveListeners()
 	{
-		$cache = Application::get('cache');
+		$cache = $this->_app['cache'];
 
 		if (false === $events = $cache->load('smcore_active_listeners'))
 		{
-			$db = Application::get('db');
+			$db = $this->_app['db'];
 			$events = array();
 
 			$result = $db->query("
 				SELECT *
 				FROM {db_prefix}event_listeners
-				WHERE listener_enabled = 1"
+				WHERE listener_enabled = 1
+				ORDER BY listener_priority ASC"
 			);
 
-			if ($result->rowCount() > 0)
+			while ($row = $result->fetch())
 			{
-				$events = $result->fetchAll();
+				$events[] = array(
+					'name' => $row['listener_name'],
+					'callback' => $row['listener_callback'],
+				);
 			}
 
 			$cache->save('smcore_active_listeners', $events);

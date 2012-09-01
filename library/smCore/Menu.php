@@ -22,116 +22,86 @@
 
 namespace smCore;
 
-class Menu
+use ArrayAccess, ArrayIterator, IteratorAggregate;
+
+class Menu implements ArrayAccess, IteratorAggregate
 {
-	protected $_parents = array();
-	protected $_menu = array();
-	protected $_active = array();
+	protected $_children = array();
 
 	public function __construct()
 	{
-		Application::get('lang')->loadPackagesByType('menu');
-
-		$cache = Application::get('cache');
-
-		if (false === $this->_parents = $cache->load('core_menu_rows'))
-		{
-			$db = Application::get('db');
-
-			$result = $db->query("
-				SELECT *
-				FROM {db_prefix}menu
-				ORDER BY menu_order ASC");
-
-			// Pack these up into a more usable format
-			$this->_parents = array();
-
-			while ($row = $result->fetch())
-			{
-				$this->_parents[$row['menu_parent']][] = $row;
-			}
-
-			$cache->save('core_menu_rows', $this->_parents);
-		}
-
-		$this->_buildMenu($this->_menu);
 	}
 
-	/**
-	 * Set the active menu item URLs.
-	 *
-	 * @param null|false|string For each parameter passed, null skips setting that level, false removes
-	 *                          the active URL for that level, and anything else sets that level.
-	 */
 	public function setActive()
 	{
-		$args = func_get_args();
+		$active = func_get_args();
+		$current = array_shift($active);
 
-		foreach ($args as $level => $arg)
+		if (!empty($current) && isset($this->_children[$current]))
 		{
-			if ($arg === false)
-			{
-				unset($this->_active[$level]);
-			}
-			else if ($arg !== null)
-			{
-				$this->_active[$level] = (string) $arg;
-			}
+			$this->_children[$current]->setActive(true, $active);
 		}
+
+		return $this;
 	}
 
-	/**
-	 * 
-	 *
-	 * @return array
-	 */
-	public function getMenu()
+	public function addItem(MenuItem $item)
 	{
-		$this->_markActive($this->_menu);
-
-		return $this->_menu;
+		$this->_children[$item->getName()] = $item;
 	}
 
-	/**
-	 * 
-	 *
-	 * @param array &$parent
-	 * @param int   $id
-	 */
-	protected function _buildMenu(&$parent, $id = 0)
+	public function removeItem($name)
 	{
-		if (!empty($this->_parents[$id]))
+		unset($this->_children[$name]);
+
+		return $this;
+	}
+
+	public function hasChildren()
+	{
+		return !empty($this->_children);
+	}
+
+	public function offsetGet($offset)
+	{
+		if (isset($this->_children[$offset]))
 		{
-			foreach ($this->_parents[$id] as $item)
+			return $this->_children[$offset];
+		}
+
+		return null;
+	}
+
+	public function offsetSet($offset, $value)
+	{
+		throw new Exception('Please use MenuItem::addItem to add items to the menu.');
+	}
+
+	public function offsetUnset($offset)
+	{
+		unset($this->_children[$offset]);
+	}
+
+	public function offsetExists($offset)
+	{
+		return isset($this->_children[$offset]);
+	}
+
+	public function getIterator()
+	{
+		$items = $this->_children;
+
+		// Copy the array because the keys will be overwritten
+		usort($items, function($a, $b)
+		{
+			if ($a->getOrder() === $b->getOrder())
 			{
-				if ($item['menu_visible'] && (empty($item['menu_permission']) || Application::get('user')->hasPermission($item['menu_permission'])))
-				{
-					$parent[$item['menu_name']] = array(
-						'url' => Settings::URL . $item['menu_url'],
-						'title' => Application::get('lang')->get($item['menu_title']),
-						'submenu' => array(),
-						'active' => false,
-					);
-
-					$this->_buildMenu($parent[$item['menu_name']]['submenu'], $item['id_menu']);
-				}
+				return 0;
 			}
-		}
-	}
 
-	/**
-	 * 
-	 *
-	 * @param array &$menu
-	 * @param int   $level
-	 */
-	protected function _markActive(&$menu, $level = 0)
-	{
-		if (!empty($this->_active[$level]) && isset($menu[$this->_active[$level]]))
-		{
-			$menu[$this->_active[$level]]['active'] = true;
+			return $a->getOrder() > $b->getOrder() ? 1 : -1;
+		});
 
-			$this->_markActive($menu[$this->_active[$level]]['submenu'], $level + 1);
-		}
+		return new ArrayIterator($items);
 	}
 }

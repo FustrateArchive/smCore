@@ -22,9 +22,9 @@
 
 namespace smCore\Storage;
 
-use smCore\Application, smCore\Exception, smCore\Model\User, smCore\Security\Session, smCore\Settings;
+use smCore\Event, smCore\Exception, smCore\Model\User, smCore\Security\Session;
 
-class Users
+class Users extends AbstractStorage
 {
 	protected $_current_user;
 	protected $_loaded_users = array();
@@ -33,9 +33,9 @@ class Users
 	{
 		if (null === $this->_current_user)
 		{
-			if (Session::exists())
+			if ($this->_app['session']->exists())
 			{
-				Session::start();
+				$this->_app['session']->start();
 
 				if (isset($_SESSION['id_user']))
 				{
@@ -55,13 +55,11 @@ class Users
 
 	public function getUserByName($name)
 	{
-		$db = Application::get('db');
-
-		$result = $db->query("
+		$result = $this->_app['db']->query("
 			SELECT *
 			FROM {db_prefix}users
-			WHERE user_login = {string:name}
-				OR user_display_name = {string:name}",
+			WHERE LOWER(user_login) = {string:name}
+				OR LOWER(user_display_name) = {string:name}",
 			array(
 				'name' => $name,
 			)
@@ -73,7 +71,30 @@ class Users
 		}
 
 		$row = $result->fetch();
-		$user = new User((int) $row['id_user']);
+		$user = new User($this->_app, $row);
+		$user->setData($row);
+
+		return $user;
+	}
+
+	public function getUserByEmail($email)
+	{
+		$result = $this->_app['db']->query("
+			SELECT *
+			FROM {db_prefix}users
+			WHERE LOWER(user_email) = {string:email}",
+			array(
+				'email' => $email,
+			)
+		);
+
+		if ($result->rowCount() < 1)
+		{
+			return false;
+		}
+
+		$row = $result->fetch();
+		$user = new User($this->_app, $row);
 		$user->setData($row);
 
 		return $user;
@@ -82,8 +103,8 @@ class Users
 	public function getUserById($id)
 	{
 		// The User class will check if this is a good ID.
-		$user = new User(array(
-			'id_user' => $id
+		$user = new User($this->_app, array(
+			'id_user' => $id,
 		));
 
 		if ($id < 1)
@@ -91,12 +112,12 @@ class Users
 			return $user;
 		}
 
-		$cache = Application::get('cache');
+		$cache = $this->_app['cache'];
 
 		// If we've already fetched the data, there's no reason to grab it again
-		if (null === $data = $cache->load('user_data_' . $id))
+		if (false === $data = $cache->load('user_data_' . $id))
 		{
-			$db = Application::get('db');
+			$db = $this->_app['db'];
 
 			$result = $db->query("
 				SELECT *
@@ -117,12 +138,37 @@ class Users
 			$cache->save($data, 'user_data_' . $id);
 		}
 
-		$this->setData($data);
+		$user->setData($data);
 
 		return $user;
 	}
 
 	public function save(User $user)
 	{
+		$db = $this->_app['db'];
+
+		if ($user['id'] < 1)
+		{
+			$id = $db->insert('users', array(
+				'user_login' => $user['login'],
+				'user_display_name' => $user['display_name'],
+				'user_email' => $user['email'],
+				'user_pass' => $user['password'],
+				'user_primary_role' => $user['roles']['primary']->getId(),
+				'user_additional_roles' => '',
+				'user_registered' => time(),
+				'user_language' => $user['language'],
+				'user_theme' => $user['theme'],
+			));
+		}
+		else
+		{
+			
+		}
+
+		$this->_app['events']->fire('org.smcore.user_data_save', array(
+			'user' => $user,
+		));
+
 	}
 }

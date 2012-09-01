@@ -27,8 +27,12 @@ use Twig_Error;
 
 class Exception
 {
-	public function __construct()
+	protected $_app;
+
+	public function __construct(Application $app)
 	{
+		$this->_app = $app;
+
 		set_exception_handler(array($this, 'handle'));
 	}
 
@@ -39,30 +43,55 @@ class Exception
 	 */
 	public function handle($exception)
 	{
-		$show_trace = Application::get('user', false) !== null && Application::get('user')->hasPermission('org.smcore.core.is_admin');
+		if ($exception instanceof \smCore\Exception)
+		{
+			$message = $exception->getRawMessage();
 
-		$response = Application::get('response');
-		$twig = Application::get('twig', false);
+			if (!empty($message) && isset($this->_app['lang']) && null !== $lang = $this->_app['lang'])
+			{
+				// If it's an array, we have replacements to send along
+				if (is_array($message))
+				{
+					$message = $lang->get($message[0], array_slice($message, 1));
+				}
+				else
+				{
+					$message = $lang->get($message);
+				}
+			}
+			else if (is_array($message))
+			{
+				$message = var_export($message, true);
+			}
+		}
+		else
+		{
+			$message = $exception->getMessage();
+		}
+
+		$this->_app['sending_output'] = null;
+
+		$show_trace = isset($this->_app['user']) && $this->_app['user']->hasPermission('org.smcore.core.is_admin');
 
 		// We can't show a nice screen if the exception came from the template engine or the theme hasn't been loaded
-		if (!($exception instanceof Twig_Error) && $twig !== null)
+		if (!($exception instanceof Twig_Error) && isset($this->_app['twig']) && null !== $twig = $this->_app['twig'])
 		{
-			$response->setBody($twig->render('error.html', array(
-				'error_message' => $exception->getMessage(),
+			$this->_app['response']->setBody($twig->render('error.html', array(
+				'error_message' => $message,
 				'error_trace' => print_r($exception->getTrace(), true),
 				'show_trace' => $show_trace,
 			)));
 		}
 		else
 		{
-			$response->setBody('Uncaught exception error:<hr /><pre>' . $exception->getMessage() . '</pre>' . ($show_trace ? '<br /><pre>' . print_r($exception->getTrace(), true) . '</pre>' : ''));
+			$this->_app['response']->setBody('Uncaught exception error:<hr /><pre>' . $message . '</pre>' . ($show_trace ? '<br /><pre>' . print_r($exception->getTrace(), true) . '</pre>' : ''));
 		}
 
 		if ($exception->getCode() !== 0)
 		{
-			$response->addHeader($exception->getCode());
+			$this->_app['response']->addHeader($exception->getCode());
 		}
 
-		$response->sendOutput();
+		$this->_app['response']->sendOutput();
 	}
 }

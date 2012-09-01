@@ -21,24 +21,56 @@
  */
 
 namespace smCore\Form\Control;
-use smCore\Application, smCore\Form\Control;
+
+use smCore\Form\Control;
 
 class Select extends Control
 {
-	public $type = 'select';
+	protected $_properties;
+	protected $_options = array();
 
-	public function validate($form)
+	public function __construct(array $properties = array())
 	{
-		$value = $this->getValue();
+		$this->_properties = array_merge(array(
+			'label' => '',
+			'name' => '',
+			'id' => '',
+			'value' => '',
+			'validation' => array(
+				'required' => false,
+			),
+		), $properties);
 
-		// If this wasn't required and they didn't send a real value, it's alright
-		if (empty($this->_properties['validation']['required']) && empty($value))
-			return true;
+		if (!empty($properties['options']))
+		{
+			$this->addOptions($properties['options']);
+		}
+	}
 
-		// Otherwise, make sure they sent an approved value
-		if (!array_key_exists($this->getValue(), $this->_properties['options']))
-			return Application::get('lang')->get('forms_error_invalid_select_value', array($this->_properties['label']));
+	public function addOption($value, $label)
+	{
+		$this->_options[$value] = $label;
 
-		return parent::$validate($form);
+		return $this;
+	}
+
+	public function addOptions(array $options)
+	{
+		foreach ($options as $value => $label)
+		{
+			$this->addOption($value, $label);
+		}
+
+		return $this;
+	}
+
+	public function getOptions()
+	{
+		return $this->_options;
+	}
+
+	public function getType()
+	{
+		return 'select';
 	}
 }

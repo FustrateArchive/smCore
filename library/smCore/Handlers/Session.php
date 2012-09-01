@@ -22,20 +22,24 @@
 
 namespace smCore\Handlers;
 
-use smCore\Storage\Factory as StorageFactory;
+use smCore\Application, smCore\Storage\Factory as StorageFactory;
 
 /**
  * Session handler class, replacing PHP's session functions. Session information is stored in the database.
  */
 class Session
 {
+	protected $storage;
+
 	/**
 	 * Instantiate a session handler. This directly replaces the default PHP handlers.
 	 *
 	 * @return boolean Whether or not we were able to set the save handler. This can return false if the session is already started.
 	 */
-	public function __construct()
+	public function __construct(Application $app)
 	{
+		$this->storage = $app['storage_factory']->factory('Sessions\\' . $app['settings']['session_driver']);
+
 		return session_set_save_handler(
 			array($this, 'open'),
 			array($this, 'close'),
@@ -78,7 +82,7 @@ class Session
 	 */
 	public function read($id)
 	{
-		return StorageFactory::factory('Sessions')->read($id);
+		return $this->storage->read($id);
 	}
 
 	/**
@@ -97,7 +101,7 @@ class Session
 			return false;
 		}
 
-		return StorageFactory::factory('Sessions')->write($id, $data);
+		return $this->storage->write($id, $data);
 	}
 
 	/**
@@ -110,7 +114,7 @@ class Session
 	public function destroy($id)
 	{
 		// Just delete the row...
-		return StorageFactory::factory('Sessions')->destroy($id);
+		return $this->storage->destroy($id);
 	}
 
 	/**
@@ -123,6 +127,6 @@ class Session
 	public function gc($max_lifetime)
 	{
 		// We're going to ignore the max session lifetime
-		StorageFactory::factory('Sessions')->deleteExpired();
+		$this->storage->deleteExpired();
 	}
 }

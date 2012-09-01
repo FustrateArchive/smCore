@@ -24,9 +24,17 @@ namespace smCore\Cache;
 
 class Factory
 {
+	/**
+	 * Load an installed cache driver by name
+	 *
+	 * @param string $driver  The name of the driver, i.e. "File"
+	 * @param array  $options Options to pass to the driver's constructor
+	 *
+	 * @return \smCore\Cache\Driver\AbstractDriver
+	 */
 	public static function factory($driver, array $options = array())
 	{
-		$class = "\\smCore\\Cache\\Driver\\" . $driver;
+		$class = "\\smCore\\Cache\\Driver\\" . ucfirst(strtolower($driver));
 		return new $class($options);
 	}
 }

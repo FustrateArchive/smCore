@@ -25,26 +25,67 @@ namespace smCore;
 class EventDispatcher
 {
 	protected $_listeners = array();
+	protected $_global_data = array();
 
+	/**
+	 * Creates a new EventDispatcher.
+	 */
 	public function __construct()
 	{
 	}
 
-	public function setListeners($listeners)
+	/**
+	 * Sets the listeners this event dispatcher should know about.
+	 *
+	 * @param array   $listeners
+	 * @param boolean $overwrite
+	 */
+	public function addListeners(array $listeners, $overwrite = false)
 	{
+		if ($overwrite)
+		{
+			$this->_listeners = array();
+		}
+
 		foreach ($listeners as $listener)
 		{
-			$this->_listeners[$listener['listener_name']][] = $listener['callback'];
+			$this->_listeners[$listener['name']][] = $listener['callback'];
 		}
+
+		return $this;
 	}
 
+	/**
+	 * Adds a listener to this dispatcher.
+	 *
+	 * @param string   $name
+	 * @param callable $callback
+	 */
 	public function addListener($name, $callback)
 	{
 		$this->_listeners[$name][] = $callback;
+
+		return $this;
 	}
 
-	public function fire(Event $event)
+	/**
+	 * Fires an event
+	 *
+	 * @param \smCore\Event $event
+	 *
+	 * @return 
+	 */
+	public function fire($event, array $data = array())
 	{
+		if (!$event instanceof Event)
+		{
+			$event = new Event($event, array_merge($this->_global_data, $data));
+		}
+		else
+		{
+			$event->setData(array_merge($this->_global_data, $event->getData()));
+		}
+
 		$name = $event->getName();
 
 		if (empty($this->_listeners[$name]))
@@ -59,17 +100,30 @@ class EventDispatcher
 			if (is_callable($listener))
 			{
 				$result = call_user_func($listener, $event);
+				$event->hasFired(true);
 
 				// An event sequence can be interrupted by returning a non-null value
-				if ($result !== null)
+				if ($event->isPropagationStopped())
 				{
-					return $result;
+					return;
 				}
 			}
 		}
 	}
 
-	public static function getListeners($name = null)
+	public function setGlobalData(array $data)
+	{
+		$this->_global_data = $data;
+
+		return $this;
+	}
+
+	public function getGlobalData()
+	{
+		return $this->_global_data;
+	}
+
+	public function getListeners($name = null)
 	{
 		if (null === $name)
 		{

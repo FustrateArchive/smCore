@@ -26,7 +26,7 @@ use smCore\Exception;
 
 class Memcached extends AbstractDriver
 {
-	public function __construct($options)
+	public function __construct(array $options)
 	{
 		if (!extension_loaded('memcached'))
 		{
@@ -67,7 +67,10 @@ class Memcached extends AbstractDriver
 		}
 	}
 
-	public function load($key)
+	/**
+	 * {@inheritdoc}
+	 */
+	public function load($key, $failure_return = false)
 	{
 		$value = $this->_memcached->get($this->_options['prefix'] . $key);
 
@@ -76,16 +79,22 @@ class Memcached extends AbstractDriver
 			return $value[0];
 		}
 
-		return false;
+		return $failure_return;
 	}
 
-	public function save($key, $data, array $tags = array(), $ttl = null)
+	/**
+	 * {@inheritdoc}
+	 */
+	public function save($key, $data, $lifetime = null)
 	{
-		$lifetime = time() + ($ttl ?: $this->_options['default_ttl']);
+		$lifetime = time() + ($lifetime ?: $this->_options['default_ttl']);
 
 		$this->_memcached->set($this->_options['prefix'] . $key, array($data, time(), $lifetime), $lifetime);
 	}
 
+	/**
+	 * {@inheritdoc}
+	 */
 	public function test($key)
 	{
 		$value = $this->_memcached->get($this->_options['prefix'] . $key);
@@ -98,16 +107,56 @@ class Memcached extends AbstractDriver
 		return false;
 	}
 
+	/**
+	 * {@inheritdoc}
+	 */
 	public function remove($key)
 	{
 		$this->_memcached->delete($this->_options['prefix'] . $key);
 	}
 
-	public function clean($mode, array $tags = array())
+	/**
+	 * {@inheritdoc}
+	 */
+	public function flush()
 	{
 	}
 
+	/**
+	 * {@inheritdoc}
+	 */
 	public function getMetadata($key)
 	{
+	}
+
+	/**
+	 * {@inheritdoc}
+	 */
+	public function getStats()
+	{
+		$stats = $this->_memcached->getStats();
+
+		$data = array(
+			'name' => 'Memcached',
+			'items' => 0,
+			'hits' => 0,
+			'misses' => 0,
+			'servers' => array(),
+		);
+
+		foreach ($stats as $ip => $server)
+		{
+			$data['items'] += $server['total_items'];
+			$data['hits'] += $server['get_hits'];
+			$data['misses'] += $server['get_misses'];
+
+			$data['servers'][] = array(
+				'uptime' => $server['uptime'],
+				'version' => $server['version'],
+				'ip' => $ip,
+			);
+		}
+
+		return $data;
 	}
 }

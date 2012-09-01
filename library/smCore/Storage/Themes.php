@@ -22,9 +22,9 @@
 
 namespace smCore\Storage;
 
-use smCore\Application, smCore\Exception, smCore\Model\Theme, smCore\Settings;
+use smCore\Exception, smCore\Model\Theme;
 
-class Themes
+class Themes extends AbstractStorage
 {
 	protected $_cache = array();
 
@@ -34,11 +34,11 @@ class Themes
 
 	public function getById($id)
 	{
-		$cache = Application::get('cache');
+		$cache = $this->_app['cache'];
 
 		if (false === $theme = $cache->load('smcore_theme_' . $id))
 		{
-			$db = Application::get('db');
+			$db = $this->_app['db'];
 
 			$result = $db->query("
 				SELECT *
@@ -63,7 +63,7 @@ class Themes
 
 	public function getDefault()
 	{
-		return $this->getById(Settings::DEFAULT_THEME);
+		return $this->getById($this->_app['settings']['default_theme']);
 	}
 
 	public function getPathForId($id)

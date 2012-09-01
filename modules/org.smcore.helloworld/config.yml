@@ -7,11 +7,13 @@ author:
     name: smCore Dev Team
     website: http://smcore.org
 
-namespace: smCore\HelloWorld
-lang_namespace: helloworld
+namespaces:
+    php:      smCore\HelloWorld
+    lang:     hello
+    template: hello
 
 routes:
     main:
-        match: ["", "home"]
+        match: hello
         controller: Main
         method: myMainMethod

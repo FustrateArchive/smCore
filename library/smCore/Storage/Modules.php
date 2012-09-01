@@ -24,37 +24,45 @@
 
 namespace smCore\Storage;
 
-use smCore\Application, smCore\Autoloader, smCore\Exception, smCore\Module, smCore\Settings, smCore\FileIO\Factory as IOFactory;
-use DirectoryIterator;
+use smCore\Autoloader, smCore\Exception, smCore\Module, smCore\FileIO\Factory as IOFactory;
+use ArrayIterator, DirectoryIterator, IteratorAggregate;
 
-class Modules
+class Modules extends AbstractStorage implements IteratorAggregate
 {
 	protected $_moduleData;
 	protected $_modules = array();
 
-	public function __construct()
+	public function __construct($app)
 	{
-		$cache = Application::get('cache');
+		parent::__construct($app);
 
+		$cache = $this->_app['cache'];
+		
 		// Load the configs
 		if (false === $this->_moduleData = $cache->load('core_module_registry_data'))
 		{
 			$this->_moduleData = array();
+			$settings = $this->_app['settings'];
 
 			// Load internal modules first, then any user-added modules
 			$this->_readModulesFromDirectory(dirname(__DIR__) . '/Modules');
-			$this->_readModulesFromDirectory(Settings::MODULE_DIR);
+			$this->_readModulesFromDirectory($settings['module_dir']);
 
 			$cache->save('core_module_registry_data', $this->_moduleData);
-
-			// @todo: cache tags
-			// Anything that depends on this should be refreshed
-			// $cache->clean('dependency_module_registry');
 		}
 
 		foreach ($this->_moduleData as $module)
 		{
-			new Autoloader($module['config']['namespace'], $module['directory']);
+			new Autoloader($module['config']['namespaces']['php'], $module['directory']);
+
+			$moduleClass = $module['config']['namespaces']['php'] . '\\Module';
+
+			if (!class_exists($moduleClass))
+			{
+				$moduleClass = 'smCore\\Module';
+			}
+
+			$this->_modules[$module['config']['identifier']] = new $moduleClass($this->_app, $module['config'], $module['directory']);
 		}
 	}
 
@@ -89,13 +97,18 @@ class Modules
 				throw new Exception(array('exceptions.modules.no_identifier', basename($module->getPathname())));
 			}
 
-			if (array_key_exists($config['identifier'], $this->_moduleData))
+			if (isset($this->_moduleData[$config['identifier']]))
 			{
 				throw new Exception(array(
 					'exceptions.modules.identifier_taken',
 					basename($module->getPathname()),
 					basename($this->_moduleData[$config['identifier']]['directory'])
 				));
+			}
+
+			if (!isset($config['namespaces']['php']))
+			{
+				throw new Exception('exceptions.modules.no_php_namespace');
 			}
 
 			$this->_moduleData[$config['identifier']] = array(
@@ -114,21 +127,7 @@ class Modules
 	{
 		if (!array_key_exists($identifier, $this->_modules))
 		{
-			if (array_key_exists($identifier, $this->_moduleData))
-			{
-				$moduleClass = $this->_moduleData[$identifier]['config']['namespace'] . '\\Module';
-
-				if (!class_exists($moduleClass))
-				{
-					$moduleClass = 'smCore\\Module';
-				}
-
-				$this->_modules[$identifier] = new $moduleClass($this->_moduleData[$identifier]['config'], $this->_moduleData[$identifier]['directory']);
-			}
-			else
-			{
-				throw new Exception('exceptions.modules.doesnt_exist', $identifier);
-			}
+			throw new Exception('exceptions.modules.doesnt_exist', $identifier);
 		}
 
 		return $this->_modules[$identifier];
@@ -152,5 +151,10 @@ class Modules
 	public function moduleExists($identifier)
 	{
 		return array_key_exists($identifier, $this->_moduleData);
+	}
+
+	public function getIterator()
+	{
+		return new ArrayIterator($this->_modules);
 	}
 }

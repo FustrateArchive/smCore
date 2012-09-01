@@ -22,30 +22,40 @@
 
 namespace smCore\Model;
 
-use smCore\Application, smCore\Event, smCore\Exception, smCore\Security\Crypt\Bcrypt, smCore\Settings, smCore\Storage;
+use smCore\Application, smCore\Event, smCore\Exception, smCore\Security\Crypt\Bcrypt, smCore\Storage;
 use ArrayAccess;
 
-class User implements ArrayAccess
+class User extends AbstractModel implements ArrayAccess
 {
 	// Data for this user
 	protected $_data = array();
 
-	public function __construct(array $data = null)
+	/**
+	 * Create a new User object
+	 *
+	 * @param smCore\Application $app
+	 * @param array              $data
+	 */
+	public function __construct(Application $app, array $data = null)
 	{
-		$roles = Storage\Factory::factory('Roles');
+		parent::__construct($app);
+
+		$roles = $this->_app['storage_factory']->factory('Roles');
 
 		// Set some defaults to begin with
 		$this->_data = array(
 			'id' => 0,
-			'ip' => Application::get('input')->server->getRaw('REMOTE_ADDR'),
+			'ip' => $this->_app['input']->server->getRaw('REMOTE_ADDR'),
 			'display_name' => 'Guest', // @todo lang string
-			'language' => Settings::DEFAULT_LANG,
-			'theme' => (int) Settings::DEFAULT_THEME,
-			'user_token' => false, // @todo
+			'language' => $this->_app['settings']['default_lang'],
+			'theme' => (int) $this->_app['settings']['default_theme'],
+			'token' => '', // @todo
+			'email' => '',
 			'roles' => array(
-				'primary' => $roles->getRoleById($roles::ROLE_GUEST),
+				'primary' => $roles->getRoleById(Storage\Roles::ROLE_GUEST),
 				'additional' => array(),
 			),
+			'password' => null,
 		);
 
 		if (null !== $data)
@@ -58,7 +68,7 @@ class User implements ArrayAccess
 	{
 		if (!empty($data['id_user']) && empty($this->_data['id_user']))
 		{
-			if (!ctype_digit($data['id_user']) || 0 > (int) $data['id_user'])
+			if (!ctype_digit((string) $data['id_user']) || 0 > (int) $data['id_user'])
 			{
 				throw new Exception('User ID must be a positive integer.');
 			}
@@ -66,17 +76,15 @@ class User implements ArrayAccess
 			$this->_data['id'] = (int) $data['id_user'];
 		}
 
+		$roles = $this->_app['storage_factory']->factory('Roles');
+
 		if (!empty($data['user_primary_role']))
 		{
-			$roles = Storage\Factory::factory('Roles');
-
 			$this->_data['roles']['primary'] = $roles->getRoleById($data['user_primary_role']);
 		}
 
 		if (!empty($data['user_additional_roles']))
 		{
-			$roles = Storage\Factory::factory('Roles');
-
 			// @todo should this be in a separate table? I think so.
 			$temp = explode(',', $data['user_additional_roles']);
 
@@ -86,7 +94,7 @@ class User implements ArrayAccess
 			}
 		}
 
-		if (!empty($data['user_theme']))
+		if (!empty($data['user_theme']) && ctype_digit($data['user_theme']))
 		{
 			$this->_data['theme'] = (int) $data['user_theme'];
 		}
@@ -111,21 +119,44 @@ class User implements ArrayAccess
 			$this->_data['email'] = $data['user_email'];
 		}
 
-		$event = new Event($this, 'org.smcore.user_data_set', array(
-			'data' => $data,
-		));
+		if (!empty($data['user_pass']))
+		{
+			$this->_data['password'] = $data['user_pass'];
+		}
 
-		Application::get('events')->fire($event);
+		$this->_app['events']->fire('org.smcore.user_data_set', array(
+			'user' => $this,
+			'data' => &$data,
+		));
 
 		return $this;
 	}
 
+	public function setRawData(array $data)
+	{
+		foreach ($data as $key => $value)
+		{
+			if ('password' === $key)
+			{
+				throw new Exception('User passwords must be set via the setPassword method.');
+			}
+
+			$this->_data[$key] = $value;
+		}
+	}
+
+	/**
+	 * Set a user's password
+	 *
+	 * @param string $password 
+	 *
+	 * @return 
+	 */
 	public function setPassword($password)
 	{
 		$bcrypt = new Bcrypt();
-		$encrypted = $bcrypt->encrypt($password);
 
-		// @todo
+		$this->_data['password'] = $bcrypt->encrypt($password);
 
 		return $this;
 	}
@@ -137,7 +168,7 @@ class User implements ArrayAccess
 	 */
 	public function save()
 	{
-		return Storage\Factory::factory('Users')->save($this);
+		return $this->_app['storage_factory']->factory('Users')->save($this);
 	}
 
 	/**
@@ -169,13 +200,62 @@ class User implements ArrayAccess
 		return false;
 	}
 
-	// ArrayAccess methods allow access via array indexes, such as $user['id']
+	public function hasRole($role)
+	{
+		if ($role instanceof Role)
+		{
+			$role = $role->getId();
+		}
+		else if (!is_int($role))
+		{
+			throw new Exception('hasRole() expected a Role or integer role ID.');
+		}
 
+		if ($this->_data['roles']['primary']->getId() === $role)
+		{
+			return true;
+		}
+
+		foreach ($this->_data['roles']['additional'] as $additional)
+		{
+			if ($additional->getId() === $role)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public function isAdmin()
+	{
+		return $this->hasRole(Storage\Roles::ROLE_ADMIN);
+	}
+
+	public function isLoggedIn()
+	{
+		return $this->hasRole(Storage\Roles::ROLE_MEMBER);
+	}
+
+	/**
+	 * ArrayAccess - implementation for empty/isset/array_key_exists/etc.
+	 *
+	 * @param mixed $offset
+	 *
+	 * @return boolean
+	 */
 	public function offsetExists($offset)
 	{
 		return isset($this->_data[$offset]);
 	}
 
+	/**
+	 * ArrayAccess - implementation for getting data via array syntax
+	 *
+	 * @param mixed $offset Name of the key, usually a string
+	 *
+	 * @return boolean
+	 */
 	public function offsetGet($offset)
 	{
 		if (array_key_exists($offset, $this->_data))
@@ -186,14 +266,34 @@ class User implements ArrayAccess
 		return false;
 	}
 
+	/**
+	 * ArrayAccess - implementation for setting data via array syntax
+	 *
+	 * @param mixed $offset Name of the key, usually a string
+	 * @param mixed $value  
+	 */
 	public function offsetSet($offset, $value)
 	{
+		if ('password' === $offset)
+		{
+			throw new Exception('User passwords cannot be set via array access.');
+		}
+
 		$this->_data[$offset] = $value;
 	}
 
+	/**
+	 * ArrayAccess - implementation for unsetting data via array syntax
+	 *
+	 * @param mixed $offset Name of the key, usually a string
+	 */
 	public function offsetUnset($offset)
 	{
 		unset($this->_data[$offset]);
 	}
 
+	public function __toString()
+	{
+		return $this->_data['display_name'] . ' (' . $this->_data['roles']['primary']->getName() . ')';
+	}
 }

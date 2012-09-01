@@ -22,66 +22,147 @@
 
 namespace smCore;
 
-class Event
+use ArrayAccess, IteratorAggregate, Countable, ArrayIterator;
+
+class Event implements ArrayAccess, IteratorAggregate
 {
-	protected $_owner;
-	protected $_name;
-	protected $_arguments;
-	protected $_value = null;
-	protected $_fired = false;
+	protected $name;
+	protected $data;
 
-	protected $_dispatcher;
+	protected $stopped = false;
+	protected $fired = false;
 
-	public function __construct($owner, $name, $arguments = null)
+	protected $dispatcher;
+
+	public function __construct($name, array $data = array())
 	{
-		$this->_owner = $owner;
-		$this->_name = $name;
-		$this->_arguments = $arguments;
+		$this->name = $name;
+		$this->data = $data;
 	}
 
 	public function setDispatcher(EventDispatcher $dispatcher)
 	{
-		$this->_dispatcher = $dispatcher;
+		$this->dispatcher = $dispatcher;
+
+		return $this;
 	}
 
-	public function getOwner()
+	public function getDispatcher()
 	{
-		return $this->_owner;
+		return $this->dispatcher;
+	}
+
+	public function setName($name)
+	{
+		$this->name = $name;
+
+		return $this;
 	}
 
 	public function getName()
 	{
-		return $this->_name;
+		return $this->name;
 	}
 
-	public function getArguments()
+	public function setData(array $data)
 	{
-		return $this->_arguments;
-	}
-
-	public function getValue()
-	{
-		return $this->_value;
-	}
-
-	public function setValue($value)
-	{
-		$this->_value = $value;
+		$this->data = $data;
 
 		return $this;
 	}
 
-	public function fired()
+	public function getData()
 	{
-		return $this->_fired;
+		return $this->data;
 	}
 
-	// Just a shortcut to let the dispatcher know to wake up and do something
-	public function fire()
+	public function hasFired($firing = false)
 	{
-		EventDispatcher::fire($this);
-		$this->_fired = true;
+		if ($firing)
+		{
+			$this->fired = true;
+		}
+
+		return $this->fired;
+	}
+
+	/**
+	 * Check if a listener has asked for this event to stop being sent to listeners.
+	 *
+	 * @return boolean True if propagation is stopped, false otherwise
+	 */
+	public function isPropagationStopped()
+	{
+		return $this->stopped;
+	}
+
+	/**
+	 * Stop any further listeners from being notified of this event.
+	 *
+	 * @return self
+	 */
+	public function stopPropagation()
+	{
+		$this->stopped = true;
 
 		return $this;
+	}
+
+	/**
+	 * ArrayAccess method for checking for the existence of an event argument.
+	 *
+	 * @param mixed $offset The offset the check
+	 *
+	 * @return boolean True if the offset exists, false otherwise
+	 */
+	public function offsetExists($offset)
+	{
+		return isset($this->data[$offset]);
+	}
+
+	/**
+	 * ArrayAccess method for setting an event argument via array syntax.
+	 *
+	 * @param mixed $offset The offset to set the value for
+	 * @param mixed $value  The value to set
+	 */
+	public function offsetSet($offset, $value)
+	{
+		$this->data[$offset] = $value;
+	}
+
+	/**
+	 * ArrayAccess method for getting an event argument via array syntax.
+	 *
+	 * @param mixed $offset The offset to search for and return
+	 *
+	 * @return mixed The argument value at the provided offset, null if not found
+	 */
+	public function offsetGet($offset)
+	{
+		if (isset($this->data[$offset]))
+		{
+			return $this->data[$offset];
+		}
+
+		return null;
+	}
+
+	/**
+	 * ArrayAccess method for unsetting an event argument.
+	 *
+	 * @param mixed $offset The offset to attempt to unset
+	 */
+	public function offsetUnset($offset)
+	{
+		unset($this->data[$offset]);
+	}
+
+	/**
+	 * ArrayIterator interface method
+	 */
+	public function getIterator()
+	{
+		return new ArrayIterator($this->data);
 	}
 }

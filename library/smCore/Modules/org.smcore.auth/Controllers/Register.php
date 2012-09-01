@@ -1,7 +1,7 @@
 <?php
 
 /**
- * 
+ * smCore Authentication Module - Register Controller
  *
  * @package smCore
  * @author smCore Dev Team
@@ -22,43 +22,46 @@
 
 namespace smCore\Modules\Auth\Controllers;
 
-use smCore\Application, smCore\Module\Controller, smCore\Storage;
+use smCore\Module\Controller, smCore\Storage;
 
 class Register extends Controller
 {
 	public function preDispatch()
 	{
-		$this->_getParentModule()->loadLangPackage();
+		$this->module->loadLangPackage();
 	}
 
 	public function register()
 	{
-		$module = $this->_getParentModule();
-		$input = Application::get('input');
+		$this->_app['menu']->setActive('register');
+
+		// We're going to skip the agreement part for now. That might be SMF-only, or a plugin.
+		return $this->module->render('register/start');
+
+		$input = $this->_app['input'];
 
 		if ($input->post->keyExists('register_agree'))
 		{
-			return $module->render('register/start');
+			return $this->module->render('register/start');
 		}
 		else if ($input->post->keyExists('register_agree_young'))
 		{
-			return $module->render('register/start');
+			return $this->module->render('register/start');
 		}
 		else
 		{
-			return $module->render('register/agreement');
+			return $this->module->render('register/agreement');
 		}
 	}
 
 	public function finish()
 	{
-		$module = $this->_getParentModule();
-		$input = Application::get('input');
+		$input = $this->_app['input'];
 
 		// Don't try to skip steps on us!
 		if (!$input->post->keyExists('register_username'))
 		{
-			Application::get('response')->redirect('/register/');
+			$this->_app['response']->redirect('/register/');
 		}
 
 		$username = $input->post->getRaw('register_username');
@@ -71,47 +74,55 @@ class Register extends Controller
 
 		if (mb_strlen($username) < 1)
 		{
-			$module->throwLangException('register.username_too_short');
+			$this->module->throwLangException('register.username_too_short');
 		}
 
 		if (mb_strlen($username) > 60)
 		{
-			$module->throwLangException('register.username_too_long');
+			$this->module->throwLangException('register.username_too_long');
 		}
 
 		// Only these characters are permitted.
 		if ('_' === $username || '|' === $username || 0 !== preg_match('/[<>&"\'=\\\\]/', preg_replace('/&#(?:\\d{1,7}|x[0-9a-fA-F]{1,6});/', '', $username)))
 		{
-			$module->throwLangException('register.username_invalid_characters');
+			$this->module->throwLangException('register.username_invalid_characters');
 		}
 
 		if (mb_strtolower($username) === 'guest' || false !== strpos(mb_strtolower($username), 'admin'))
 		{
-			$module->throwLangException('register.username_reserved');
+			$this->module->throwLangException('register.username_reserved');
 		}
 
 		if ($pass1 != $pass2)
 		{
-			$module->throwLangExcption('register.password_mismatch');
+			$this->module->throwLangExcption('register.password_mismatch');
 		}
 
 		if (empty($pass1))
 		{
-			$module->throwLangException('register.no_email');
+			$this->module->throwLangException('register.no_email');
 		}
 
 		// @todo Better email validation, not using a regex.
 		if (empty($email) || 0 === preg_match('~^[0-9A-Za-z=_+\-/][0-9A-Za-z=_\'+\-/\.]*@[\w\-]+(\.[\w\-]+)*(\.[\w]{2,6})$~', $email) || mb_strlen($email) > 255)
 		{
-			$module->throwLangException('register.invalid_email');
+			$this->module->throwLangException('register.invalid_email');
 		}
 
-		$storage = Storage\Factory::factory('Users');
+		$storage = $this->_app['storage_factory']->factory('Users');
 
 		// Check to see if this username is taken
-		if (false !== $username_taken = $storage->getUserByName($username))
+		if (false !== $storage->getUserByName($username))
 		{
-			$module->throwLangException('register.username_taken');
+			$this->module->throwLangException('register.username_taken');
+		}
+
+		// @todo add a findUserByData-ish method to storage, this query shouldn't be here
+		$db = $this->_app['db'];
+
+		if ($db->query("SELECT * FROM {db_prefix}users WHERE LOWER(user_email) = {string:email}", array('email' => mb_strtolower($email)))->rowCount() > 0)
+		{
+			$this->module->throwLangException('register.email_already_used');
 		}
 
 		$user = $storage
@@ -122,9 +133,12 @@ class Register extends Controller
 				'user_email' => $email,
 			))
 			->setPassword($pass1)
+			->save()
 		;
 
-		// @todo save the user and show a success screen
+		$this->_app['menu']->setActive('register');
+
+		return $this->module->render('register/finish');
 	}
 
 	public function activate()

@@ -2,13 +2,15 @@ name: Internal smCore User Authentication Module
 description: |
     Includes login, logout, and register.
 identifier: org.smcore.auth
-version: 1.0
+version: 1.0 Alpha 1
 author:
     name: smCore Dev Team
     website: http://smcore.org
 
-namespace: smCore\Modules\Auth
-lang_namespace: users
+namespaces:
+    php:      smCore\Modules\Auth
+    lang:     auth
+    template: auth
 
 routes:
     login:
@@ -27,3 +29,18 @@ routes:
     activate:
         match: register/activate
         controller: Register
+
+    # User account management
+    profile:
+        match: [profile, profile/:user]
+        controller: Profile
+        method: main
+    settings:
+        match: [profile/settings, profile/:user/settings]
+        controller: Profile
+        method: settings
+
+    admin:
+        match: admin/users
+        controller: Admin
+        method: main

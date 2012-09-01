@@ -1,0 +1,25 @@
+{% extends "@theme/layout.html" %}
+{% from "@theme/macros.html" import submenu %}
+
+{% set page_title = lang('admin.maintenance.titles.main') %}
+
+{% block body %}
+	{{ submenu("admin") }}
+
+	<div class="page-header">
+		<h1>{{ lang('admin.maintenance.titles.main') }}</h1>
+	</div>
+
+	{% for task in tasks %}
+	<h2>{{ task.name }}</h2>
+	<div class="well">
+		<p>
+			{{ task.help }}
+		</p>
+		
+		{% for button in task.buttons %}
+		<a href="{{ button.href }}" class="btn btn-danger">{{ button.text }}</a>
+		{% endfor %}
+	</div>
+	{% endfor %}
+{% endblock %}

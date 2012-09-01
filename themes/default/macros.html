@@ -1,0 +1,31 @@
+{#
+	Macros that can be used as needed on pages.
+#}
+
+{% macro submenu(which) %}
+		<ul class="nav nav-tabs">
+{% for item in menu[which] if item.visible %}
+{% if item.hasChildren %}
+			<li class="dropdown{{ item.active ? ' active' : '' }}">
+				<a class="dropdown-toggle" data-toggle="dropdown" href="{{ url_for(item.url) }}">
+					{{ item.title }}
+					<b class="caret"></b>
+				</a>
+				<ul class="dropdown-menu">
+{% for subitem in item %}
+					<li{{ subitem.active ? ' class="active"' : '' }}><a href="{{ url_for(subitem.url) }}">{{ subitem.title }}</a></li>
+{% endfor %}
+				</ul>
+			</li>
+{% else %}
+			<li{{ item.active ? ' class="active"' : '' }}><a href="{{ url_for(item.url) }}">{{ item.title }}</a></li>
+{% endif %}
+{% endfor %}
+		</ul>
+{%- endmacro %}
+
+{% macro pagination(url, pages, current_page) %}
+
+	{# todo #}
+
+{%- endmacro %}
